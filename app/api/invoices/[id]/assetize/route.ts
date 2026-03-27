@@ -21,7 +21,7 @@ export async function POST(
   }
 
   const appUrl =
-    process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+    process.env.NEXT_PUBLIC_APP_URL || "https://payreceipt.vercel.app"
 
   const browser = await chromium.launch({ headless: true })
 

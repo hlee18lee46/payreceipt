@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import QRCode from "qrcode"
 import { createInvoice, InvoiceItem } from "@/lib/invoices"
+import { TronWeb } from "tronweb"
 
 export const runtime = "nodejs"
 
@@ -13,12 +14,27 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
 
     const merchantName = body?.merchantName?.trim()
+    const merchantWallet = body?.merchantWallet?.trim()
     const customerName = body?.customerName?.trim() || ""
     const items = body?.items as InvoiceItem[]
 
     if (!merchantName) {
       return NextResponse.json(
         { ok: false, error: "merchantName is required" },
+        { status: 400 }
+      )
+    }
+
+    if (!merchantWallet) {
+      return NextResponse.json(
+        { ok: false, error: "merchantWallet is required" },
+        { status: 400 }
+      )
+    }
+
+    if (!TronWeb.isAddress(merchantWallet)) {
+      return NextResponse.json(
+        { ok: false, error: "Invalid merchantWallet address" },
         { status: 400 }
       )
     }
@@ -61,7 +77,7 @@ export async function POST(req: NextRequest) {
     const id = makeInvoiceId()
 
     const appUrl =
-      process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+      process.env.NEXT_PUBLIC_APP_URL || "https://payreceipt.vercel.app"
     const checkoutUrl = `${appUrl}/pay/${id}`
 
     const qrDataUrl = await QRCode.toDataURL(checkoutUrl, {
@@ -72,6 +88,7 @@ export async function POST(req: NextRequest) {
     const invoice = createInvoice({
       id,
       merchantName,
+      merchantWallet,
       customerName,
       items: normalizedItems,
       subtotalTrx,

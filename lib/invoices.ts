@@ -7,6 +7,7 @@ export type InvoiceItem = {
 export type InvoiceRecord = {
   id: string
   merchantName: string
+  merchantWallet: string
   customerName?: string
   items: InvoiceItem[]
   subtotalTrx: number
@@ -19,7 +20,6 @@ export type InvoiceRecord = {
   pdfPath?: string
   previewImagePath?: string
 }
-
 const invoiceStore = new Map<string, InvoiceRecord>()
 
 export function createInvoice(record: InvoiceRecord) {
