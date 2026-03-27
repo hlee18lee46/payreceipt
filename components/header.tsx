@@ -103,26 +103,23 @@ export function Header() {
           </Link>
         </div>
 
-        <div className="hidden items-center gap-8 md:flex">
-          <Link
-            href="/pay"
-            className="text-sm font-medium text-muted-foreground hover:text-foreground"
-          >
-            Pay
-          </Link>
-          <Link
-            href="/dashboard"
-            className="text-sm font-medium text-muted-foreground hover:text-foreground"
-          >
-            Dashboard
-          </Link>
-          <Link
-            href="/escrow"
-            className="text-sm font-medium text-muted-foreground hover:text-foreground"
-          >
-            Escrow
-          </Link>
-        </div>
+<div className="hidden items-center gap-8 md:flex">
+  <Link href="/dashboard" className="text-sm font-medium text-muted-foreground hover:text-foreground">
+    Dashboard
+  </Link>
+
+  <Link href="/dashboard/invoices/new" className="text-sm font-medium text-primary hover:text-primary/80">
+    Create Invoice
+  </Link>
+
+  <Link href="/dashboard/invoices" className="text-sm font-medium text-muted-foreground hover:text-foreground">
+    Invoices
+  </Link>
+
+  <Link href="/escrow" className="text-sm font-medium text-muted-foreground hover:text-foreground">
+    Escrow
+  </Link>
+</div>
 
         <div className="hidden items-center gap-3 md:flex">
           {mounted && connected ? (
