@@ -150,14 +150,16 @@ export async function POST(req: NextRequest) {
     const metadataCID = pinataJsonRes.data.IpfsHash;
     const metadataUri = `${normalizedGateway}/${metadataCID}`;
 
+
     // 4) Mint on TRON
     const contract = await tronWeb.contract(contractAbi, contractAddress);
+    console.log("contract loaded:", contractAddress);
 
     const txResult = await contract
       .mint(to, normalizedTokenId, metadataUri)
       .send({
         feeLimit: 200_000_000,
-        shouldPollResponse: true,
+        shouldPollResponse: false,
         keepTxID: true,
       });
 
@@ -186,6 +188,8 @@ export async function POST(req: NextRequest) {
     ) {
       txid = (txResult as { txid: string }).txid;
     }
+
+    console.log("mint txid:", txid);
 
     const explorer = txid
       ? `https://nile.tronscan.org/#/transaction/${txid}`

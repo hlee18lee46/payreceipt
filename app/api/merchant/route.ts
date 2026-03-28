@@ -4,12 +4,32 @@ import { connectDB, Merchant } from "@/lib/db";
 export async function GET() {
   try {
     await connectDB();
-    const address = process.env.MERCHANT_ADDRESS;
-    const merchant = await Merchant.findOne({ address });
     
-    // Return the name from DB, or fallback to ReceiptPay
-    return NextResponse.json({ name: merchant?.name || "ReceiptPay" });
+    // We fetch using the Master Merchant address from your .env
+    const envAddress = process.env.MERCHANT_ADDRESS;
+    
+    if (!envAddress) {
+      return NextResponse.json({ error: "Server configuration missing" }, { status: 500 });
+    }
+
+    const merchant = await Merchant.findOne({ address: envAddress });
+    
+    if (!merchant) {
+      // Return a fallback but include the expected address for the frontend check
+      return NextResponse.json({ 
+        name: "TRON_POS", 
+        address: envAddress 
+      });
+    }
+
+    // SUCCESS: Return both the name and the address 
+    // This allows the "New Invoice" page to pass the (address === data.address) check
+    return NextResponse.json({ 
+      name: merchant.name, 
+      address: merchant.address 
+    });
   } catch (error) {
+    console.error("GET Error:", error);
     return NextResponse.json({ error: "Fetch failed" }, { status: 500 });
   }
 }

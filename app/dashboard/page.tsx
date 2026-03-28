@@ -1,171 +1,218 @@
 "use client"
 
-import { useState } from "react"
-import Link from "next/link"
+import { useState, useEffect, useMemo } from "react"
 import { Header } from "@/components/header"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useWallet } from "@tronweb3/tronwallet-adapter-react-hooks"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { StatusBadge } from "@/components/status-badge"
-import { CopyButton } from "@/components/copy-button"
-import { shortenAddress } from "@/components/address-display"
+import { Loader2, DollarSign, Clock, TrendingUp, Receipt, Lock, ShieldAlert } from "lucide-react"
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts"
 import { toast } from "sonner"
-import {
-  Plus,
-  ExternalLink,
-  Receipt,
-  DollarSign,
-  Clock,
-  TrendingUp,
-} from "lucide-react"
+import Link from "next/link"
 
-interface Invoice {
-  id: string
-  amount: string
-  description: string
-  status: "paid" | "unpaid"
-  timestamp: string
-  txHash?: string
-}
+export default function MerchantDashboard() {
+  const { address, connected } = useWallet()
+  
+  // 1. Authorization States
+  const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null)
+  const [checkingAuth, setCheckingAuth] = useState(true)
+  
+  // 2. Data States
+  const [invoices, setInvoices] = useState<any[]>([])
+  const [loadingInvoices, setLoadingInvoices] = useState(false)
+  const [timeFilter, setTimeFilter] = useState<"7d" | "30d" | "all">("7d")
 
-// Mock data
-const initialInvoices: Invoice[] = [
-  {
-    id: "1",
-    amount: "250.00",
-    description: "Website development services",
-    status: "paid",
-    timestamp: new Date(Date.now() - 86400000).toISOString(),
-    txHash: "TQ3Y7VJHNsdfk2JKsdzek1234567890abcdef",
-  },
-  {
-    id: "2",
-    amount: "150.00",
-    description: "Monthly hosting fee",
-    status: "paid",
-    timestamp: new Date(Date.now() - 172800000).toISOString(),
-    txHash: "TAbc1234567890abcdef0987654321fedcba",
-  },
-  {
-    id: "3",
-    amount: "500.00",
-    description: "Logo design project",
-    status: "unpaid",
-    timestamp: new Date(Date.now() - 259200000).toISOString(),
-  },
-  {
-    id: "4",
-    amount: "75.00",
-    description: "Consultation call",
-    status: "paid",
-    timestamp: new Date(Date.now() - 345600000).toISOString(),
-    txHash: "TXyz9876543210fedcba0987654321abcd",
-  },
-  {
-    id: "5",
-    amount: "1200.00",
-    description: "E-commerce integration",
-    status: "unpaid",
-    timestamp: new Date(Date.now() - 432000000).toISOString(),
-  },
-]
+  // --- STEP 1: VERIFY MERCHANT STATUS ---
+  useEffect(() => {
+    const verifyAccess = async () => {
+      if (!connected || !address) {
+        setIsAuthorized(false)
+        setCheckingAuth(false)
+        return
+      }
 
-export default function DashboardPage() {
-  const [invoices, setInvoices] = useState<Invoice[]>(initialInvoices)
-  const [showCreateForm, setShowCreateForm] = useState(false)
-  const [newAmount, setNewAmount] = useState("")
-  const [newDescription, setNewDescription] = useState("")
+      try {
+        const res = await fetch("/api/merchant")
+        const data = await res.json()
+        
+        // Check if the connected wallet matches the master merchant address in MongoDB
+        if (data.address && address === data.address) {
+          setIsAuthorized(true)
+        } else {
+          setIsAuthorized(false)
+        }
+      } catch (err) {
+        setIsAuthorized(false)
+      } finally {
+        setCheckingAuth(false)
+      }
+    }
 
-  const stats = {
-    totalReceived: invoices
-      .filter((i) => i.status === "paid")
-      .reduce((sum, i) => sum + parseFloat(i.amount), 0),
-    pending: invoices.filter((i) => i.status === "unpaid").length,
-    totalInvoices: invoices.length,
-  }
+    verifyAccess()
+  }, [connected, address])
 
-  const handleCreateInvoice = (e: React.FormEvent) => {
-    e.preventDefault()
+  // --- STEP 2: FETCH INVOICES (ONLY IF AUTHORIZED) ---
+  useEffect(() => {
+    if (!isAuthorized || !address) return
+
+    const fetchInvoices = async () => {
+      setLoadingInvoices(true)
+      try {
+        const res = await fetch(`/api/invoices?address=${address}`)
+        const data = await res.json()
+        setInvoices(data)
+      } catch (error) {
+        toast.error("Failed to load ledger data")
+      } finally {
+        setLoadingInvoices(false)
+      }
+    }
+
+    fetchInvoices()
+  }, [isAuthorized, address])
+
+  // --- DATA CALCULATIONS ---
+  const stats = useMemo(() => {
+    const now = new Date()
+    const filterDays = timeFilter === "7d" ? 7 : timeFilter === "30d" ? 30 : 999
     
-    if (!newAmount || parseFloat(newAmount) <= 0) {
-      toast.error("Please enter a valid amount")
-      return
-    }
+    const filtered = invoices.filter(inv => {
+      const date = new Date(inv.createdAt)
+      const diffTime = Math.abs(now.getTime() - date.getTime())
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+      return diffDays <= filterDays
+    })
 
-    const newInvoice: Invoice = {
-      id: (invoices.length + 1).toString(),
-      amount: parseFloat(newAmount).toFixed(2),
-      description: newDescription || "Invoice",
-      status: "unpaid",
-      timestamp: new Date().toISOString(),
-    }
+    const received = filtered.filter(i => i.status === "paid").reduce((sum, i) => sum + i.amount, 0)
+    const receivable = filtered.filter(i => i.status === "pending").reduce((sum, i) => sum + i.amount, 0)
 
-    setInvoices([newInvoice, ...invoices])
-    setNewAmount("")
-    setNewDescription("")
-    setShowCreateForm(false)
-    toast.success("Invoice created successfully")
+    const chartData = filtered
+      .filter(i => i.status === "paid")
+      .reduce((acc: any[], inv) => {
+        const date = new Date(inv.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        const existing = acc.find(item => item.date === date)
+        if (existing) existing.amount += inv.amount
+        else acc.push({ date, amount: inv.amount })
+        return acc
+      }, [])
+      .reverse()
+
+    return { received, receivable, chartData }
+  }, [invoices, timeFilter])
+
+  // --- RENDER LOGIC ---
+
+  // A. Loading Auth State
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen bg-neutral-50/50 flex flex-col">
+        <Header />
+        <div className="flex-1 flex flex-col items-center justify-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-neutral-400" />
+          <p className="text-sm font-medium text-neutral-500 uppercase tracking-widest">Verifying Merchant Wallet...</p>
+        </div>
+      </div>
+    )
   }
 
+  // B. Restricted Access View
+  if (!isAuthorized) {
+    return (
+      <div className="min-h-screen bg-neutral-50/50 flex flex-col">
+        <Header />
+        <main className="flex-1 flex items-center justify-center p-6">
+          <Card className="max-w-md w-full border-none shadow-2xl rounded-3xl p-8 text-center space-y-6">
+            <div className="mx-auto w-20 h-20 bg-amber-50 rounded-2xl flex items-center justify-center">
+              <Lock className="h-10 w-10 text-amber-600" />
+            </div>
+            <div className="space-y-2">
+              <h1 className="text-2xl font-bold text-neutral-900">Protected Dashboard</h1>
+              <p className="text-sm text-neutral-500 leading-relaxed">
+                The financial data for this store is restricted. Please connect the registered Merchant Wallet to proceed.
+              </p>
+            </div>
+            <div className="pt-4 space-y-3">
+              <Button asChild className="w-full py-6 rounded-xl font-bold bg-neutral-900">
+                <Link href="/merchant/signup">Apply for Access</Link>
+              </Button>
+              <Link href="/" className="block text-xs font-bold text-neutral-400 uppercase tracking-widest hover:text-neutral-600">
+                Back to Landing
+              </Link>
+            </div>
+          </Card>
+        </main>
+      </div>
+    )
+  }
+
+  // C. Master Merchant View (Full Dashboard)
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-neutral-50/50">
       <Header />
-      
-      <main className="mx-auto max-w-7xl px-6 py-12 lg:px-8">
-        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Merchant Dashboard</h1>
-            <p className="mt-2 text-muted-foreground">
-              Manage invoices and track payments
-            </p>
+      <main className="mx-auto max-w-7xl px-6 py-10 space-y-8 animate-in fade-in duration-700">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+                <h1 className="text-3xl font-bold tracking-tight text-neutral-900">Merchant Insights</h1>
+                <ShieldAlert className="h-5 w-5 text-green-500" />
+            </div>
+            <p className="text-neutral-500 font-medium">Viewing ledger for wallet: <span className="font-mono text-neutral-900">{address?.slice(0,12)}...</span></p>
           </div>
-          <Button onClick={() => setShowCreateForm(!showCreateForm)} className="gap-2">
-            <Plus className="h-4 w-4" />
-            Create Invoice
-          </Button>
+          
+          <div className="flex items-center gap-2 bg-white p-1 rounded-xl border shadow-sm">
+            {(["7d", "30d", "all"] as const).map((t) => (
+              <Button 
+                key={t}
+                variant={timeFilter === t ? "default" : "ghost"} 
+                size="sm" 
+                onClick={() => setTimeFilter(t)}
+                className="text-xs uppercase font-bold rounded-lg"
+              >
+                {t}
+              </Button>
+            ))}
+          </div>
         </div>
 
-        {/* Stats */}
-        <div className="mb-8 grid gap-4 sm:grid-cols-3">
-          <Card>
+        {/* --- Metrics, Charts, and Ledger (Same as your provided JSX) --- */}
+        <div className="grid gap-6 md:grid-cols-3">
+          <Card className="border-none shadow-sm bg-white">
             <CardContent className="p-6">
               <div className="flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-success/10">
-                  <DollarSign className="h-6 w-6 text-success" />
+                <div className="p-3 bg-green-50 rounded-xl">
+                  <DollarSign className="h-6 w-6 text-green-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Total Received</p>
-                  <p className="text-2xl font-bold">{stats.totalReceived.toFixed(2)} TRX</p>
+                  <p className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Accounts Received</p>
+                  <p className="text-2xl font-black text-neutral-900">{stats.received.toLocaleString()} TRX</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          
-          <Card>
+
+          <Card className="border-none shadow-sm bg-white">
             <CardContent className="p-6">
               <div className="flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-warning/10">
-                  <Clock className="h-6 w-6 text-warning-foreground" />
+                <div className="p-3 bg-amber-50 rounded-xl">
+                  <Clock className="h-6 w-6 text-amber-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Pending Invoices</p>
-                  <p className="text-2xl font-bold">{stats.pending}</p>
+                  <p className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Accounts Receivable</p>
+                  <p className="text-2xl font-black text-neutral-900">{stats.receivable.toLocaleString()} TRX</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          
-          <Card>
+
+          <Card className="border-none shadow-sm bg-white">
             <CardContent className="p-6">
               <div className="flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent/10">
-                  <TrendingUp className="h-6 w-6 text-accent" />
+                <div className="p-3 bg-blue-50 rounded-xl">
+                  <TrendingUp className="h-6 w-6 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Total Invoices</p>
-                  <p className="text-2xl font-bold">{stats.totalInvoices}</p>
+                  <p className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Total Volume</p>
+                  <p className="text-2xl font-black text-neutral-900">{(stats.received + stats.receivable).toLocaleString()} TRX</p>
                 </div>
               </div>
             </CardContent>
@@ -173,139 +220,60 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid gap-8 lg:grid-cols-3">
-          {/* Create Invoice Form */}
-          <div className={showCreateForm ? "lg:col-span-1" : "hidden"}>
-            <Card>
-              <CardHeader>
-                <CardTitle>New Invoice</CardTitle>
-                <CardDescription>
-                  Create a new invoice for your customer
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleCreateInvoice} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="invoice-amount">Amount (TRX)</Label>
-                    <Input
-                      id="invoice-amount"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      placeholder="0.00"
-                      value={newAmount}
-                      onChange={(e) => setNewAmount(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="invoice-description">Description</Label>
-                    <Textarea
-                      id="invoice-description"
-                      placeholder="What is this invoice for?"
-                      value={newDescription}
-                      onChange={(e) => setNewDescription(e.target.value)}
-                      rows={3}
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <Button type="submit" className="flex-1">
-                      Create Invoice
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setShowCreateForm(false)}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-          </div>
+          {/* Sales Trend Chart */}
+          <Card className="lg:col-span-2 border-none shadow-sm bg-white">
+            <CardHeader>
+              <CardTitle className="text-lg">Revenue Trend</CardTitle>
+              <CardDescription>Daily settled payments (TRX)</CardDescription>
+            </CardHeader>
+            <CardContent className="h-[300px] pl-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={stats.chartData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                  <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#999'}} />
+                  <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#999'}} />
+                  <Tooltip 
+                    cursor={{fill: '#f8f8f8'}} 
+                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
+                  />
+                  <Bar dataKey="amount" fill="#000" radius={[4, 4, 0, 0]} barSize={30} />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
 
-          {/* Invoices List */}
-          <div className={showCreateForm ? "lg:col-span-2" : "lg:col-span-3"}>
-            <Card>
-              <CardHeader>
-                <CardTitle>Invoices</CardTitle>
-                <CardDescription>
-                  View and manage all your invoices
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {invoices.map((invoice) => (
-                    <div
-                      key={invoice.id}
-                      className="flex flex-col gap-4 rounded-lg border border-border p-4 sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <div className="flex items-start gap-4">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-                          <Receipt className="h-5 w-5 text-muted-foreground" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <p className="font-semibold">{invoice.amount} TRX</p>
-                            <StatusBadge status={invoice.status} />
-                          </div>
-                          <p className="mt-1 truncate text-sm text-muted-foreground">
-                            {invoice.description}
-                          </p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {new Date(invoice.timestamp).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        {invoice.txHash && (
-                          <div className="flex items-center gap-1">
-                            <code className="rounded bg-muted px-2 py-1 font-mono text-xs">
-                              {shortenAddress(invoice.txHash, 4)}
-                            </code>
-                            <CopyButton text={invoice.txHash} />
-                          </div>
-                        )}
-                        {invoice.status === "paid" && invoice.txHash && (
-                          <Button variant="outline" size="sm" asChild>
-                            <Link href={`/receipt/${invoice.id}`}>
-                              View Receipt
-                              <ExternalLink className="ml-1 h-3 w-3" />
-                            </Link>
-                          </Button>
-                        )}
-                        {invoice.status === "unpaid" && (
-                          <Button variant="outline" size="sm" asChild>
-                            <Link href={`/pay?amount=${invoice.amount}&description=${encodeURIComponent(invoice.description)}`}>
-                              Pay Now
-                            </Link>
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+          {/* Recent Ledger */}
+          <Card className="border-none shadow-sm bg-white">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-lg">Recent Ledger</CardTitle>
+                <CardDescription>Status tracker</CardDescription>
+              </div>
+              <Receipt className="h-5 w-5 text-neutral-300" />
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {loadingInvoices ? (
+                <div className="flex justify-center py-10"><Loader2 className="animate-spin text-neutral-300" /></div>
+              ) : invoices.length === 0 ? (
+                <p className="text-xs text-center text-neutral-400 py-10 italic">No invoices recorded yet.</p>
+              ) : invoices.slice(0, 6).map((inv) => (
+                <div key={inv._id} className="flex items-center justify-between p-3 rounded-xl bg-neutral-50 border border-neutral-100">
+                  <div className="space-y-1">
+                    <p className="text-sm font-bold text-neutral-900">{inv.amount} TRX</p>
+                    <p className="text-[10px] text-neutral-400 uppercase font-bold tracking-tighter">{inv.customerName}</p>
+                  </div>
+                  <div className={`text-[9px] font-black px-2 py-1 rounded-lg uppercase tracking-tighter ${
+                    inv.status === 'paid' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                  }`}>
+                    {inv.status}
+                  </div>
                 </div>
-
-                {invoices.length === 0 && (
-                  <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-                      <Receipt className="h-8 w-8 text-muted-foreground" />
-                    </div>
-                    <h3 className="mt-4 font-semibold">No invoices yet</h3>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      Create your first invoice to get started
-                    </p>
-                    <Button
-                      onClick={() => setShowCreateForm(true)}
-                      className="mt-4"
-                    >
-                      Create Invoice
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+              ))}
+              <Button variant="ghost" className="w-full text-xs font-bold text-neutral-400 hover:text-neutral-900" asChild>
+                <Link href="/invoices">View All Activity</Link>
+              </Button>
+            </CardContent>
+          </Card>
         </div>
       </main>
     </div>

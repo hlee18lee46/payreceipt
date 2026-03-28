@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import QRCode from "qrcode"
-import { createInvoice, InvoiceItem } from "@/lib/invoices"
+import { connectDB, Invoice } from "@/lib/db" // Added DB imports
 import { TronWeb } from "tronweb"
 
 export const runtime = "nodejs"
-
-function makeInvoiceId() {
-  return `inv_${Date.now()}`
-}
 
 export async function POST(req: NextRequest) {
   try {
@@ -15,26 +11,20 @@ export async function POST(req: NextRequest) {
 
     const merchantName = body?.merchantName?.trim()
     const merchantWallet = body?.merchantWallet?.trim()
-    const customerName = body?.customerName?.trim() || ""
-    const items = body?.items as InvoiceItem[]
+    const customerName = body?.customerName?.trim() || "Guest Customer"
+    const items = body?.items
 
-    if (!merchantName) {
+    // 1. Validation Logic
+    if (!merchantName || !merchantWallet) {
       return NextResponse.json(
-        { ok: false, error: "merchantName is required" },
-        { status: 400 }
-      )
-    }
-
-    if (!merchantWallet) {
-      return NextResponse.json(
-        { ok: false, error: "merchantWallet is required" },
+        { ok: false, error: "Merchant details are required" },
         { status: 400 }
       )
     }
 
     if (!TronWeb.isAddress(merchantWallet)) {
       return NextResponse.json(
-        { ok: false, error: "Invalid merchantWallet address" },
+        { ok: false, error: "Invalid TRON wallet address" },
         { status: 400 }
       )
     }
@@ -46,38 +36,35 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // 2. Normalize and calculate totals
     const normalizedItems = items.map((item) => ({
       name: String(item.name ?? "").trim(),
       quantity: Number(item.quantity ?? 0),
       unitPriceTrx: Number(item.unitPriceTrx ?? 0),
     }))
 
-    const hasInvalidItem = normalizedItems.some(
-      (item) =>
-        !item.name ||
-        !Number.isFinite(item.quantity) ||
-        item.quantity <= 0 ||
-        !Number.isFinite(item.unitPriceTrx) ||
-        item.unitPriceTrx < 0
-    )
-
-    if (hasInvalidItem) {
-      return NextResponse.json(
-        { ok: false, error: "Invalid invoice items" },
-        { status: 400 }
-      )
-    }
-
-    const subtotalTrx = normalizedItems.reduce(
+    const totalTrx = normalizedItems.reduce(
       (sum, item) => sum + item.quantity * item.unitPriceTrx,
       0
     )
 
-    const totalTrx = subtotalTrx
-    const id = makeInvoiceId()
+    // 3. Connect to MongoDB
+    await connectDB()
 
-    const appUrl =
-      process.env.NEXT_PUBLIC_APP_URL || "https://payreceipt.vercel.app"
+    // 4. Create the Invoice in Database
+    // We let MongoDB generate the unique _id
+    const newInvoice = await Invoice.create({
+      merchantAddress: merchantWallet,
+      customerName: customerName,
+      amount: totalTrx,
+      items: normalizedItems,
+      status: 'pending', // 'pending' matches your AR (Accounts Receivable) logic
+    })
+
+    const id = newInvoice._id.toString()
+
+    // 5. Generate Checkout URL and QR Code
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
     const checkoutUrl = `${appUrl}/pay/${id}`
 
     const qrDataUrl = await QRCode.toDataURL(checkoutUrl, {
@@ -85,29 +72,28 @@ export async function POST(req: NextRequest) {
       margin: 2,
     })
 
-    const invoice = createInvoice({
-      id,
-      merchantName,
-      merchantWallet,
-      customerName,
-      items: normalizedItems,
-      subtotalTrx,
-      totalTrx,
-      status: "unpaid",
-      checkoutUrl,
-      qrDataUrl,
-      createdAt: new Date().toISOString(),
-    })
-
+    // 6. Return the combined data
     return NextResponse.json({
       ok: true,
-      invoice,
+      invoice: {
+        id,
+        merchantName,
+        merchantWallet,
+        customerName,
+        items: normalizedItems,
+        totalTrx,
+        status: "pending",
+        checkoutUrl,
+        qrDataUrl,
+        createdAt: newInvoice.createdAt,
+      },
     })
   } catch (error) {
+    console.error("Invoice Creation Error:", error)
     return NextResponse.json(
       {
         ok: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: error instanceof Error ? error.message : "Internal Server Error",
       },
       { status: 500 }
     )

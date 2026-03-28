@@ -256,7 +256,7 @@ export default function PayPage() {
                     <p className="text-xs text-muted-foreground uppercase font-bold tracking-widest">Transaction Hash</p>
                     <div className="flex items-center gap-2">
                       <code className="text-xs font-mono bg-muted p-2 rounded flex-1">{shortenAddress(result.txHash, 12)}</code>
-                      <a href={`https://tronscan.org/#/transaction/${result.txHash}`} target="_blank" className="p-2 bg-primary/10 rounded-md hover:bg-primary/20 transition">
+                      <a href={`https://nile.tronscan.org/#/transaction/${result.txHash}`} target="_blank" className="p-2 bg-primary/10 rounded-md hover:bg-primary/20 transition">
                         <ExternalLink className="h-4 w-4 text-primary" />
                       </a>
                     </div>

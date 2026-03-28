@@ -8,7 +8,7 @@ import './globals.css'
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  title: 'ReceiptPay | Blockchain Payments with NFT Receipts',
+  title: 'TRON_POS | Blockchain Payments with NFT Receipts',
   description: 'TRON-based payment system with NFT receipts. Send payments, generate on-chain receipts, and verify transactions instantly.',
   generator: 'v0.app',
   icons: {

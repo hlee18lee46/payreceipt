@@ -299,7 +299,7 @@ export default function EscrowPage() {
                           </code>
                           <CopyButton text={escrowData.txHash} />
                           <a
-                            href={`https://tronscan.org/#/transaction/${escrowData.txHash}`}
+                            href={`https://nile.tronscan.org/#/transaction/${escrowData.txHash}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="ml-1 text-accent hover:text-accent/80"

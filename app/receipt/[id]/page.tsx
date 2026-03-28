@@ -129,7 +129,7 @@ export default async function ReceiptPage({
                     </code>
                     <CopyButton text={receipt.txHash} />
                     <a
-                      href={`https://tronscan.org/#/transaction/${receipt.txHash}`}
+                      href={`https://nile.tronscan.org/#/transaction/${receipt.txHash}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="ml-1 text-accent hover:text-accent/80"
@@ -191,7 +191,7 @@ export default async function ReceiptPage({
                     </code>
                     <CopyButton text={receipt.contractAddress} />
                     <a
-                      href={`https://tronscan.org/#/contract/${receipt.contractAddress}`}
+                      href={`https://nile.tronscan.org/#/contract/${receipt.contractAddress}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="ml-1 text-accent hover:text-accent/80"
@@ -227,7 +227,7 @@ export default async function ReceiptPage({
             <div className="flex gap-4">
               <Button asChild className="flex-1">
                 <a
-                  href={`https://tronscan.org/#/transaction/${receipt.txHash}`}
+                  href={`https://nile.tronscan.org/#/transaction/${receipt.txHash}`}
                   target="_blank"
                   rel="noopener noreferrer"
                 >

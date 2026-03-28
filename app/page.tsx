@@ -56,15 +56,15 @@ export default function HomePage() {
 
               {merchantName && (
                 <div className="mb-6 inline-flex items-center rounded-full bg-primary/10 px-4 py-1.5 text-sm font-medium text-primary animate-in fade-in slide-in-from-bottom-2">
-                  Welcome to {merchantName}
+                  Welcome to TRON_POS!
                 </div>
               )}
 
               <h1 className="text-balance text-4xl font-bold tracking-tight sm:text-6xl">
-                Blockchain Payments at {merchantName || "ReceiptPay"}
+                Blockchain Payments at TRON_POS!
               </h1>
               <p className="mt-6 text-pretty text-lg leading-relaxed text-muted-foreground">
-                Send secure TRX payments to {merchantName || "merchants"}, generate verifiable NFT receipts, and track every transaction on the TRON blockchain.
+                Send and receive secure TRX payments, generate verifiable NFT receipts, and track every transaction on the TRON blockchain.
               </p>
               
               <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
@@ -237,10 +237,10 @@ export default function HomePage() {
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
                   <Receipt className="h-4 w-4 text-primary-foreground" />
                 </div>
-                <span className="font-semibold">ReceiptPay</span>
+                <span className="font-semibold">TRON_POS</span>
               </div>
               <p className="text-sm text-muted-foreground">
-                © 2026 {merchantName || "ReceiptPay"}. Built on TRON.
+                © 2026 {merchantName || "TRON_POS"}. Built on TRON.
               </p>
             </div>
           </div>

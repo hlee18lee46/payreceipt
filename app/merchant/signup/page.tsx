@@ -7,18 +7,19 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Store, CheckCircle2, AlertCircle, Loader2 } from "lucide-react"
+import { Store, Clock, AlertCircle, Loader2, ArrowLeft, CheckCircle2 } from "lucide-react"
 import { toast } from "sonner"
+import Link from "next/link"
 
 export default function MerchantSignup() {
   const { connected, address } = useWallet()
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isSuccess, setIsSuccess] = useState(false)
+  const [status, setStatus] = useState<"idle" | "review">("idle")
 
   const handleSignup = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!connected) {
-      toast.error("Please connect your wallet first!")
+    if (!connected || !address) {
+      toast.error("Please connect your TronLink wallet")
       return
     }
 
@@ -38,35 +39,44 @@ export default function MerchantSignup() {
         body: JSON.stringify(payload),
       })
 
-      if (res.ok) {
-        setIsSuccess(true)
-        toast.success("Merchant registered successfully!")
-      } else {
-        throw new Error("Failed to register")
-      }
+      if (!res.ok) throw new Error("Failed to save application")
+
+      // Success: Data is in DB, now show the "Review" screen
+      setStatus("review")
+      toast.success("Application data saved to MongoDB")
     } catch (error) {
-      toast.error("Registration failed. Try again.")
+      console.error(error)
+      toast.error("Database connection error. Check your API.")
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  if (isSuccess) {
+  if (status === "review") {
     return (
       <div className="min-h-screen bg-background flex flex-col">
         <Header />
         <main className="flex-1 flex items-center justify-center p-6">
-          <Card className="max-w-md w-full text-center py-10">
-            <CardContent className="space-y-4">
-              <div className="mx-auto w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center">
-                <CheckCircle2 className="w-10 h-10 text-green-500" />
+          <Card className="max-w-md w-full border-primary/20 shadow-2xl">
+            <CardContent className="pt-10 pb-10 text-center space-y-6">
+              <div className="relative mx-auto w-20 h-20">
+                <Clock className="w-20 h-20 text-primary/20 animate-spin-slow" />
+                <CheckCircle2 className="absolute inset-0 w-10 h-10 text-primary m-auto" />
               </div>
-              <CardTitle className="text-2xl">You're all set!</CardTitle>
-              <CardDescription>
-                Your store is now live on the TRON network. You can now start accepting payments.
-              </CardDescription>
-              <Button asChild className="w-full mt-4">
-                <a href="/">Go to Storefront</a>
+              <div className="space-y-2">
+                <CardTitle className="text-2xl font-bold">Application Received</CardTitle>
+                <p className="text-muted-foreground">
+                  Your details for <span className="font-mono text-foreground">{address?.slice(0, 6)}...</span> are now in our system.
+                </p>
+              </div>
+              <div className="bg-primary/5 rounded-lg p-4 text-sm text-primary border border-primary/10 font-medium">
+                Your application is currently under review. The TRON_POS team will contact you shortly.
+              </div>
+              <Button asChild variant="outline" className="w-full gap-2">
+                <Link href="/">
+                  <ArrowLeft className="w-4 h-4" />
+                  Back to Dashboard
+                </Link>
               </Button>
             </CardContent>
           </Card>
@@ -79,15 +89,15 @@ export default function MerchantSignup() {
     <div className="min-h-screen bg-background">
       <Header />
       <main className="mx-auto max-w-lg px-6 py-20">
-        <Card className="border-border shadow-2xl">
+        <Card className="border-border shadow-xl">
           <CardHeader className="space-y-1">
             <div className="flex items-center gap-2 mb-2">
               <Store className="w-5 h-5 text-primary" />
-              <span className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Partner Program</span>
+              <span className="text-xs font-bold uppercase tracking-widest text-primary">Onboarding</span>
             </div>
-            <CardTitle className="text-3xl">Launch your Shop</CardTitle>
+            <CardTitle className="text-3xl font-bold tracking-tight">Merchant Sign-up</CardTitle>
             <CardDescription>
-              Join the ReceiptPay network and issue NFT receipts to your customers.
+              Submit your business details to the TRON_POS database.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -98,37 +108,36 @@ export default function MerchantSignup() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="email">Business Email</Label>
-                <Input id="email" name="email" type="email" placeholder="hello@yourshop.com" required />
+                <Label htmlFor="email">Contact Email</Label>
+                <Input id="email" name="email" type="email" placeholder="admin@business.com" required />
               </div>
 
               <div className="space-y-2">
-                <Label>Payout Address (Auto-detected)</Label>
+                <Label>Wallet Address (Public Key)</Label>
                 {connected ? (
-                  <div className="flex items-center gap-2 p-3 rounded-lg bg-primary/5 border border-primary/20 text-sm font-mono text-primary">
-                    <CheckCircle2 className="w-4 h-4" />
-                    {address?.slice(0, 10)}...{address?.slice(-10)}
+                  <div className="flex items-center gap-2 p-3 rounded-lg bg-secondary border border-border text-xs font-mono break-all text-muted-foreground">
+                    {address}
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/5 border border-destructive/20 text-sm text-destructive">
+                  <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/5 border border-destructive/20 text-sm text-destructive font-medium">
                     <AlertCircle className="w-4 h-4" />
-                    Connect wallet to verify address
+                    Please connect TronLink to proceed
                   </div>
                 )}
               </div>
 
               <Button 
                 type="submit" 
-                className="w-full h-12 text-base font-semibold" 
+                className="w-full h-12 text-base font-semibold transition-all shadow-md active:scale-[0.98]" 
                 disabled={!connected || isSubmitting}
               >
                 {isSubmitting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Munching Data...
+                    Saving to Database...
                   </>
                 ) : (
-                  "Create Merchant Profile"
+                  "Submit Application"
                 )}
               </Button>
             </form>
