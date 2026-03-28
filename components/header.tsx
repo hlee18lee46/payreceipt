@@ -112,7 +112,7 @@ export function Header() {
     Create Invoice
   </Link>
 
-  <Link href="/dashboard/invoices" className="text-sm font-medium text-muted-foreground hover:text-foreground">
+  <Link href="/invoices" className="text-sm font-medium text-muted-foreground hover:text-foreground">
     Invoices
   </Link>
 
