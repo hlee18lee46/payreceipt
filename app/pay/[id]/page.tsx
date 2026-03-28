@@ -72,73 +72,68 @@ export default function PayInvoicePage() {
     }
   }
 
-  const handlePay = async () => {
-    if (!invoice) return
+const handlePay = async () => {
+  if (!invoice) return
 
-    if (!connected) {
-      alert("Please connect TronLink first.")
-      return
-    }
-
-    try {
-      setPaying(true)
-
-      const recipientAddress = invoice.merchantWallet
-      if (!recipientAddress) {
-        throw new Error("Invoice is missing merchant wallet")
-      }
-
-      if (address && address === recipientAddress) {
-        throw new Error("Customer wallet cannot be the same as merchant wallet")
-      }
-
-      const sunAmount = Math.round(invoice.totalTrx * 1_000_000)
-
-      const tronWeb = (window as any).tronWeb
-      if (!tronWeb) {
-        throw new Error("TronWeb not found in browser")
-      }
-
-      const txResult = await tronWeb.trx.sendTransaction(recipientAddress, sunAmount)
-
-      const txid =
-        txResult?.txid ||
-        txResult?.txID ||
-        txResult?.transaction?.txID ||
-        null
-
-      if (!txid) {
-        console.log("Unexpected payment result:", txResult)
-        throw new Error("Payment sent but transaction hash was not found")
-      }
-
-        setPaymentResult({ txid })
-
-        // 1. confirm payment (mark invoice paid)
-        await fetch(`/api/invoices/${invoiceId}/confirm-payment`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ txid }),
-        })
-
-        // 2. trigger NFT mint
-        const mintRes = await fetch(`/api/invoices/${invoiceId}/mint`, {
-        method: "POST",
-        })
-
-        const mintData = await mintRes.json()
-
-        console.log("Mint result:", mintData)
-
-        alert("Payment successful! NFT receipt minted 🎉")
-
-      console.log("Payment result:", txResult)
-    } catch (err) {
-      alert(err instanceof Error ? err.message : String(err))
-    } finally {
-      setPaying(false)
-    }
+  if (!connected) {
+    alert("Please connect TronLink first.")
+    return
   }
+
+  try {
+    setPaying(true)
+
+    // 1. HARDCODE THE RECIPIENT TO MATCH YOUR UI
+    const recipientAddress = "TBW1Bgq5qSxr5k9D1Pmu2idjP1kCXq59A6"
+
+    // 2. THE BOUNCER: Prevent self-payment
+    if (address && address === recipientAddress) {
+      throw new Error("You are currently connected as the Merchant. Please switch to a different account in TronLink to pay this invoice.")
+    }
+
+    const sunAmount = Math.round(invoice.totalTrx * 1_000_000)
+
+    const tronWeb = (window as any).tronWeb
+    if (!tronWeb) {
+      throw new Error("TronWeb not found in browser")
+    }
+
+    // 3. SEND TRANSACTION
+    const txResult = await tronWeb.trx.sendTransaction(recipientAddress, sunAmount)
+
+    const txid =
+      txResult?.txid ||
+      txResult?.txID ||
+      txResult?.transaction?.txID ||
+      null
+
+    if (!txid) {
+      console.log("Unexpected payment result:", txResult)
+      throw new Error("Payment sent but transaction hash was not found")
+    }
+
+    setPaymentResult({ txid })
+
+    // 4. Update Backend
+    await fetch(`/api/invoices/${invoiceId}/confirm-payment`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ txid }),
+    })
+
+    // 5. Mint NFT Receipt
+    await fetch(`/api/invoices/${invoiceId}/mint`, {
+      method: "POST",
+    })
+
+    alert("Payment successful! NFT receipt minted 🎉")
+
+  } catch (err) {
+    alert(err instanceof Error ? err.message : String(err))
+  } finally {
+    setPaying(false)
+  }
+}
 
   if (loading) {
     return <main className="p-8">Loading invoice...</main>
@@ -158,9 +153,14 @@ export default function PayInvoicePage() {
           <div>
             <strong>Merchant:</strong> {invoice.merchantName}
           </div>
-          <div>
-            <strong>Merchant Wallet:</strong> {invoice.merchantWallet}
-          </div>
+<div className="space-y-1">
+  <p className="text-xs font-bold uppercase text-muted-foreground tracking-widest">
+    Merchant Wallet (Recipient)
+  </p>
+  <div className="font-mono text-sm text-blue-600 font-bold break-all bg-blue-50 p-2 rounded border border-blue-100">
+    TBW1Bgq5qSxr5k9D1Pmu2idjP1kCXq59A6
+  </div>
+</div>
           <div>
             <strong>Status:</strong> {invoice.status}
           </div>
