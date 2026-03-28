@@ -6,6 +6,8 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  // ADD THIS BLOCK:
+  serverExternalPackages: ["canvas"],
 }
 
 export default nextConfig

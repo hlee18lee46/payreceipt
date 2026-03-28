@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
 import FormData from "form-data";
 import { TronWeb } from "tronweb";
+import sharp from "sharp"; // Using sharp instead of canvas
 
 export const runtime = "nodejs";
 
@@ -19,94 +20,49 @@ const contractAbi = [
   },
 ] as const;
 
-function getRequiredEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
-  return value;
-}
-
-function serializeError(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  return String(error);
-}
-
 export async function POST(req: NextRequest) {
   try {
-    const form = await req.formData();
+    const body = await req.json();
+    const { to, amount = "0", name = "Customer", description = "TRON Payment" } = body;
+    const tokenId = body.tokenId || Date.now().toString();
 
-    const to = form.get("to") as string | null;
-    const tokenId = form.get("tokenId") as string | null;
-    const name = (form.get("name") as string | null) || "Uploaded TRON NFT";
-    const description =
-      (form.get("description") as string | null) || "Minted from uploaded image";
-    const file = form.get("image") as File | null;
+    const pinataJwt = process.env.PINATA_JWT;
+    const gateway = process.env.PINATA_GATEWAY?.replace(/\/+$/, "");
 
-    if (!to) {
-      return NextResponse.json(
-        { ok: false, error: "to is required" },
-        { status: 400 }
-      );
-    }
+    // 1. GENERATE DYNAMIC IMAGE USING SVG + SHARP
+    // This bypasses the "Black Image" bug on macOS
+    const svgReceipt = `
+    <svg width="600" height="800" viewBox="0 0 600 800" xmlns="http://www.w3.org/2000/svg">
+      <rect width="600" height="800" fill="white"/>
+      <rect width="600" height="120" fill="#FF0013"/>
+      <text x="300" y="75" font-family="Arial" font-size="40" font-weight="bold" fill="white" text-anchor="middle">RECEIPT PAY</text>
+      
+      <text x="50" y="200" font-family="Courier" font-size="20" fill="black">ID: ${tokenId.slice(-12).toUpperCase()}</text>
+      <text x="50" y="240" font-family="Courier" font-size="20" fill="black">DATE: ${new Date().toLocaleDateString()}</text>
+      <text x="50" y="280" font-family="Courier" font-size="20" fill="black">HOLDER: ${to.slice(0, 10)}...</text>
+      
+      <line x1="50" y1="320" x2="550" y2="320" stroke="black" stroke-width="2"/>
+      
+      <text x="300" y="500" font-family="Arial" font-size="100" font-weight="bold" fill="black" text-anchor="middle">${amount} TRX</text>
+      
+      <text x="300" y="750" font-family="Arial" font-size="16" fill="#666666" text-anchor="middle" font-style="italic">Verified on TRON Nile Testnet</text>
+    </svg>
+    `;
 
-    if (!tokenId) {
-      return NextResponse.json(
-        { ok: false, error: "tokenId is required" },
-        { status: 400 }
-      );
-    }
+    // Convert SVG to PNG Buffer
+    const imageBuffer = await sharp(Buffer.from(svgReceipt)).png().toBuffer();
 
-    if (!file) {
-      return NextResponse.json(
-        { ok: false, error: "image file is required" },
-        { status: 400 }
-      );
-    }
-
-    const fullHost = getRequiredEnv("TRON_FULL_HOST");
-    const privateKey = getRequiredEnv("TRON_PRIVATE_KEY");
-    const contractAddress = getRequiredEnv("TRON_NFT_CONTRACT");
-    const pinataJwt = getRequiredEnv("PINATA_JWT");
-    const pinataGateway = getRequiredEnv("PINATA_GATEWAY");
-
-    const tronWeb = new TronWeb({
-      fullHost,
-      privateKey,
-    });
-
-    if (!tronWeb.isAddress(to)) {
-      return NextResponse.json(
-        { ok: false, error: "Invalid TRON recipient address" },
-        { status: 400 }
-      );
-    }
-
-    if (!tronWeb.isAddress(contractAddress)) {
-      return NextResponse.json(
-        { ok: false, error: "Invalid TRON contract address in TRON_NFT_CONTRACT" },
-        { status: 500 }
-      );
-    }
-
-    const normalizedTokenId = BigInt(tokenId).toString();
-    const normalizedGateway = pinataGateway.replace(/\/+$/, "");
-
-    // 1) Upload image to Pinata
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-
+    // 2. UPLOAD TO PINATA
     const uploadForm = new FormData();
-    uploadForm.append("file", buffer, {
-      filename: file.name || "upload.png",
-      contentType: file.type || "application/octet-stream",
+    uploadForm.append("file", imageBuffer, {
+      filename: `receipt.png`,
+      contentType: "image/png",
     });
 
     const pinataFileRes = await axios.post(
       "https://api.pinata.cloud/pinning/pinFileToIPFS",
       uploadForm,
       {
-        maxBodyLength: Infinity,
         headers: {
           ...uploadForm.getHeaders(),
           Authorization: `Bearer ${pinataJwt}`,
@@ -114,106 +70,52 @@ export async function POST(req: NextRequest) {
       }
     );
 
-    const imageCID = pinataFileRes.data.IpfsHash;
-    const imageUrl = `${normalizedGateway}/${imageCID}`;
+    const imageUrl = `${gateway}/${pinataFileRes.data.IpfsHash}`;
 
-    // 2) Build metadata JSON
+    // 3. UPLOAD METADATA (Bounty Direction: Verifiable Artifacts)
     const metadata = {
-      name,
-      description,
+      name: `Receipt #${tokenId.slice(-6)}`,
+      description: `Payment of ${amount} TRX by ${name}`,
       image: imageUrl,
-      external_url: imageUrl,
-      attributes: [],
-      properties: {
-        files: [
-          {
-            uri: imageUrl,
-            type: file.type || "image/png",
-          },
-        ],
-        category: "image",
-      },
+      attributes: [
+        { trait_type: "Amount", value: amount },
+        { trait_type: "Agent_Verifiable", value: "true" }
+      ]
     };
 
-    // 3) Upload metadata JSON to Pinata
     const pinataJsonRes = await axios.post(
       "https://api.pinata.cloud/pinning/pinJSONToIPFS",
       metadata,
       {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${pinataJwt}`,
-        },
+        headers: { Authorization: `Bearer ${pinataJwt}` },
       }
     );
 
-    const metadataCID = pinataJsonRes.data.IpfsHash;
-    const metadataUri = `${normalizedGateway}/${metadataCID}`;
+    const metadataUri = `${gateway}/${pinataJsonRes.data.IpfsHash}`;
 
+    // 4. MINT ON TRON
+    const tronWeb = new TronWeb({
+      fullHost: "https://nile.trongrid.io",
+      privateKey: process.env.TRON_PRIVATE_KEY,
+    });
 
-    // 4) Mint on TRON
-    const contract = await tronWeb.contract(contractAbi, contractAddress);
-    console.log("contract loaded:", contractAddress);
+    const contract = await tronWeb.contract(contractAbi, process.env.TRON_NFT_CONTRACT);
+    const txid = await contract.mint(to, tokenId, metadataUri).send();
 
-    const txResult = await contract
-      .mint(to, normalizedTokenId, metadataUri)
-      .send({
-        feeLimit: 200_000_000,
-        shouldPollResponse: false,
-        keepTxID: true,
-      });
-
-    let txid: string | null = null;
-
-    if (typeof txResult === "string") {
-      txid = txResult;
-    } else if (
-      Array.isArray(txResult) &&
-      txResult.length > 0 &&
-      typeof txResult[0] === "string"
-    ) {
-      txid = txResult[0];
-    } else if (
-      txResult &&
-      typeof txResult === "object" &&
-      "txID" in txResult &&
-      typeof (txResult as { txID?: unknown }).txID === "string"
-    ) {
-      txid = (txResult as { txID: string }).txID;
-    } else if (
-      txResult &&
-      typeof txResult === "object" &&
-      "txid" in txResult &&
-      typeof (txResult as { txid?: unknown }).txid === "string"
-    ) {
-      txid = (txResult as { txid: string }).txid;
-    }
-
-    console.log("mint txid:", txid);
-
-    const explorer = txid
-      ? `https://nile.tronscan.org/#/transaction/${txid}`
-      : null;
+    // Inside your Mint Route's try block
+    const transactionId = typeof txid === 'string' ? txid : txid.txID;
+    const explorerUrl = `https://nile.tronscan.org/#/transaction/${transactionId}`;
 
     return NextResponse.json({
       ok: true,
-      to,
-      tokenId: normalizedTokenId,
-      imageCID,
+      txid: transactionId,
+      explorer: explorerUrl, // Explicitly provide the full URL
       imageUrl,
-      metadataCID,
-      metadataUri,
-      txid,
-      explorer,
-      result: txResult,
+      metadataUri
     });
-  } catch (error) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: serializeError(error),
-      },
-      { status: 500 }
-    );
+
+  } catch (error: any) {
+    console.error("MINT ERROR:", error.message);
+    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
 }

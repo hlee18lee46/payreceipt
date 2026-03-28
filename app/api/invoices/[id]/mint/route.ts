@@ -67,26 +67,25 @@ export async function POST(
   const metadataUri = `${process.env.PINATA_GATEWAY}/${metaData.IpfsHash}`
 
   // ⚡ Step 4: call your TRON mint API
-  const mintRes = await fetch(
-    `${process.env.NEXT_PUBLIC_APP_URL}/api/nft/mint`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        to: invoice.merchantWallet,
-        tokenId: Date.now(),
-        metadataUri,
-      }),
-    }
-  )
-
+const mintRes = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/nft/mint`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    to: updatedInvoice.merchantAddress,
+    amount: updatedInvoice.amount,
+    name: updatedInvoice.customerName,
+    description: `Invoice ${id} Paid`
+  })
+});
   const mintData = await mintRes.json()
 
   return NextResponse.json({
-    ok: true,
-    metadataUri,
-    mintResult: mintData,
-  })
-}
+      ok: true,
+      metadataUri,
+      // Add these lines to ensure the frontend sees the links:
+      txid: mintData.txid,
+      explorer: mintData.explorer, 
+      imageUrl: mintData.imageUrl,
+      mintResult: mintData,
+    });
+  }
