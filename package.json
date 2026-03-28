@@ -44,7 +44,6 @@
     "autoprefixer": "^10.4.20",
     "axios": "^1.13.6",
     "bs58": "^6.0.0",
-    "canvas": "^2.11.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "1.1.1",

@@ -116,9 +116,7 @@ export function Header() {
     Invoices
   </Link>
 
-  <Link href="/escrow" className="text-sm font-medium text-muted-foreground hover:text-foreground">
-    Escrow
-  </Link>
+
 </div>
 
         <div className="hidden items-center gap-3 md:flex">
