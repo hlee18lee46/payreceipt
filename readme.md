@@ -16,6 +16,18 @@ Users can:
 
 ---
 
+## SMART CONTRACT ReceiptNFT.sol
+
+In TRONBOX_SMART_CONTRACT/contracts/ReceiptNFT.sol
+
+There is a tronbox that is used to deploy the smart contract, 
+
+ReceiptNFT.sol was compiled and deloyed using migrations/1_deploy_receipt_nft.js
+
+The smart contract was deployed for TRON_POS to mint NFT receipt.
+
+---
+
 ## ✨ Features
 
 * 💸 TRON (TRX) payment via TronLink

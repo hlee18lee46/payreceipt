@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "dotenv": "^17.3.1",
+    "tronweb": "^6.2.2"
+  }
+}
