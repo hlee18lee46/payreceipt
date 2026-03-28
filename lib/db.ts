@@ -15,35 +15,39 @@ const MerchantSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
 });
 
-export const Merchant = mongoose.models.Merchant || mongoose.model('Merchant', MerchantSchema);
+export const Merchant =
+  mongoose.models.Merchant || mongoose.model('Merchant', MerchantSchema);
 
 // --- INVOICE SCHEMA ---
 const InvoiceSchema = new mongoose.Schema({
-  // Link to the merchant who issued it
   merchantAddress: { type: String, required: true, index: true },
   customerName: { type: String, default: "Guest" },
-  
-  // Financial Data
-  amount: { type: Number, required: true }, // Total TRX
-  items: [{
-    name: { type: String, required: true },
-    quantity: { type: Number, default: 1 },
-    unitPriceTrx: { type: Number, required: true }
-  }],
-  
-  // Status Tracking
-  status: { 
-    type: String, 
-    enum: ['pending', 'paid', 'void'], 
+
+  amount: { type: Number, required: true },
+  items: [
+    {
+      name: { type: String, required: true },
+      quantity: { type: Number, default: 1 },
+      unitPriceTrx: { type: Number, required: true }
+    }
+  ],
+
+  status: {
+    type: String,
+    enum: ['pending', 'paid', 'void'],
     default: 'pending',
-    index: true 
+    index: true
   },
-  
-  // Blockchain Data
-  txId: { type: String, unique: true, sparse: true }, // Populated after payment
+
+  txId: { type: String, unique: true, sparse: true },
   paidAt: { type: Date },
-  
+
+  nftExplorer: { type: String, default: null },
+  imageUrl: { type: String, default: null },
+  metadataUri: { type: String, default: null },
+
   createdAt: { type: Date, default: Date.now }
 });
 
-export const Invoice = mongoose.models.Invoice || mongoose.model('Invoice', InvoiceSchema);
+export const Invoice =
+  mongoose.models.Invoice || mongoose.model('Invoice', InvoiceSchema);
